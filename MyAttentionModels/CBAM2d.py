@@ -14,7 +14,8 @@ import torch.nn as nn
 
 class CBAM2d(nn.Module):
     """
-    "Convolutional Block Attention Module", reference to "http://arxiv.org/abs/1807.06521"
+    卷积块注意力模块, "Convolutional Block Attention Module"
+    reference to "http://arxiv.org/abs/1807.06521"
     """
     def __init__(self, channel, r=16, kernel_size=7):
         """
