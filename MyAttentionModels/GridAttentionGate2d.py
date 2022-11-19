@@ -8,6 +8,7 @@
 """
 import torch
 import torch.nn as nn
+from torch.nn import functional as F
 
 
 
@@ -47,8 +48,6 @@ class GridAttentionGate2d(nn.Module):
 
         # 定义ψ，将结合后的特征图通道数降为1
         self.psi = nn.Conv2d(in_channels=F_int, out_channels=1, kernel_size=1, stride=1, padding=0, bias=True)
-        # 定义计算注意力分数的Sigmoid激活函数
-        self.sigmoid = nn.Sigmoid()
 
         # 根据指定的模式选择不同的函数执行前向传播操作
         if mode == 'concatenation':
@@ -67,21 +66,109 @@ class GridAttentionGate2d(nn.Module):
 
 
     def _concatenation(self, x, g):
-        pass
+        # 获取和检测维度信息
+        input_size = x.size()
+        bs = input_size[0]
+        assert bs == g.size(0)
+
+        # 输入特征图转换
+        theta_x = self.theta(x)
+        # 获取转换后输入特征图维度
+        theta_x_size = theta_x.size()
+
+        # 门控特征图转换并且上采样到和转换后的输入特征图一样的大小
+        phi_g = F.interpolate(self.phi(g), size=theta_x_size[2:], mode="bilinear", align_corners=True)
+        # 将转换后的输入特征图和，门控特征图相加，经过一个激活函数
+        f = F.relu(theta_x + phi_g, inplace=True)
+
+        # 将注意力特征图转换为通道为1，然后经过Sigmoid转换为近似0-1之间的注意力分数矩阵
+        sigm_psi_f = torch.sigmoid(self.psi(f))
+
+        # 将注意力分数矩阵上采样到和输入特征图一样大小
+        sigm_psi_f = F.interpolate(sigm_psi_f, size=input_size[2:], mode="bilinear", align_corners=True)
+        # 将注意力分数矩阵和原输入特征图逐元素相乘
+        y = sigm_psi_f.expand_as(x) * x
+        # 将增强后的特征图经过转换处理后输出
+        W_y = self.W(y)
+
+        return W_y, sigm_psi_f
+
 
 
     def _concatenation_debug(self, x, g):
-        pass
+        # 获取和检测维度信息
+        input_size = x.size()
+        bs = input_size[0]
+        assert bs == g.size(0)
+
+        # 输入特征图转换
+        theta_x = self.theta(x)
+        # 获取转换后输入特征图维度
+        theta_x_size = theta_x.size()
+
+        # 门控特征图转换并且上采样到和转换后的输入特征图一样的大小
+        phi_g = F.interpolate(self.phi(g), size=theta_x_size[2:], mode="bilinear", align_corners=True)
+        # 将转换后的输入特征图和，门控特征图相加，经过一个激活函数
+        f = F.softplus(theta_x + phi_g)
+
+        # 将注意力特征图转换为通道为1，然后经过Sigmoid转换为近似0-1之间的注意力分数矩阵
+        sigm_psi_f = torch.sigmoid(self.psi(f))
+
+        # 将注意力分数矩阵上采样到和输入特征图一样大小
+        sigm_psi_f = F.interpolate(sigm_psi_f, size=input_size[2:], mode="bilinear", align_corners=True)
+        # 将注意力分数矩阵和原输入特征图逐元素相乘
+        y = sigm_psi_f.expand_as(x) * x
+        # 将增强后的特征图经过转换处理后输出
+        W_y = self.W(y)
+
+        return W_y, sigm_psi_f
 
 
     def _concatenation_residual(self, x, g):
-        pass
+        # 获取和检测维度信息
+        input_size = x.size()
+        bs = input_size[0]
+        assert bs == g.size(0)
+
+        # 输入特征图转换
+        theta_x = self.theta(x)
+        # 获取转换后输入特征图维度
+        theta_x_size = theta_x.size()
+
+        # 门控特征图转换并且上采样到和转换后的输入特征图一样的大小
+        phi_g = F.interpolate(self.phi(g), size=theta_x_size[2:], mode="bilinear", align_corners=True)
+        # 将转换后的输入特征图和，门控特征图相加，经过一个激活函数
+        f = F.relu(theta_x + phi_g, inplace=True)
+
+        # 将注意力特征图转换为通道为1，然后对所有注意力分数进行Softmax归一化
+        f = self.psi(f).view(bs, 1, -1)
+        softmax_psi_f = torch.softmax(f, dim=2).view(bs, 1, *theta_x_size[2:])
+
+        # 将注意力分数矩阵上采样到和输入特征图一样大小
+        softmax_psi_f = F.interpolate(softmax_psi_f, size=input_size[2:], mode="bilinear", align_corners=True)
+        # 将注意力分数矩阵和原输入特征图逐元素相乘
+        y = softmax_psi_f.expand_as(x) * x
+        # 将增强后的特征图经过转换处理后输出
+        W_y = self.W(y)
+
+        return W_y, softmax_psi_f
 
 
 
 
 
+if __name__ == '__main__':
+    model = GridAttentionGate2d(128, 256, 64, mode="concatenation", sub_sample_factor=2)
 
+    x = torch.rand((4, 128, 112, 112))
+    g = torch.rand((4, 256, 56, 56))
+
+    W_y, sigm_psi_f = model(x, g)
+
+    print(x.size())
+    print(g.size())
+    print(W_y.size())
+    print(sigm_psi_f.size())
 
 
 
