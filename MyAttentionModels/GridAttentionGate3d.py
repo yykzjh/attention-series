@@ -17,7 +17,7 @@ class GridAttentionGate3d(nn.Module):
     网格注意力门控模块
     reference to "http://arxiv.org/abs/1804.03999"
     """
-    def __init__(self, F_l, F_g, F_int=None, mode="concatenation", sub_sample_factor=2):
+    def __init__(self, F_l, F_g, F_int=None, mode="concatenation", sub_sample_factor=1):
         """
         定义一个网格注意力门控模块
 
@@ -158,7 +158,7 @@ class GridAttentionGate3d(nn.Module):
 
 
 if __name__ == '__main__':
-    model = GridAttentionGate3d(128, 256, 64, mode="concatenation", sub_sample_factor=2)
+    model = GridAttentionGate3d(128, 256, 64, mode="concatenation", sub_sample_factor=1)
 
     x = torch.rand((4, 128, 80, 80, 48))
     g = torch.rand((4, 256, 40, 40, 24))
